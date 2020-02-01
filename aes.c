@@ -1,3 +1,5 @@
+// gcc (-ggdb | -O3) -o aes aes.c && cat aes_sample.in | ./aes | xxd -l 16 -p
+
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
@@ -240,16 +242,30 @@ unsigned char reverseByte(unsigned char b) {
 }
 
 int main () {
-	// bitsblock keyBlock= {0xF4C020A0, 0xA1F604FD, 0x343FAC6A, 0x7E6AE0F9};
-	bitsblock keyBlock= {0xA020C0F4, 0xFD04F6A1, 0x6AAc3F34, 0xF9E06A7E};
-	// bitsblock plainBlock = {0xF295B931, 0x8B994434, 0xD93D98A4, 0xE449AFD8};
-	bitsblock plainBlock = {0x31B995F2, 0x3444998B, 0xA4983DD9, 0xD8AF49E4};
-	bitsblock cipherBlock = {0x00000000, 0x00000000, 0x00000000, 0x00000000};
-	key = (unsigned char *) &keyBlock;
-	plain = (unsigned char *) &plainBlock;
-	cipher = (unsigned char *) &cipherBlock;
+	// // bitsblock keyBlock= {0xF4C020A0, 0xA1F604FD, 0x343FAC6A, 0x7E6AE0F9};
+	// bitsblock keyBlock= {0xA020C0F4, 0xFD04F6A1, 0x6AAc3F34, 0xF9E06A7E};
+	// // bitsblock plainBlock = {0xF295B931, 0x8B994434, 0xD93D98A4, 0xE449AFD8};
+	// bitsblock plainBlock = {0x31B995F2, 0x3444998B, 0xA4983DD9, 0xD8AF49E4};
+	// bitsblock cipherBlock = {0x00000000, 0x00000000, 0x00000000, 0x00000000};
+	// key = (unsigned char *) &keyBlock;
+	// plain = (unsigned char *) &plainBlock;
+	// cipher = (unsigned char *) &cipherBlock;
 
+	// plainSize = 16;
+
+	unsigned char keyBuf[16];
+	freopen(NULL, "rb", stdin);
+	fread(keyBuf, sizeof(keyBuf), 1, stdin);
+	key = keyBuf;
+
+	unsigned char plainBuf[16];
+	fread(plainBuf, sizeof(plainBuf), 1, stdin);
+	plain = plainBuf;
 	plainSize = 16;
+
+	unsigned char cipherBuf[plainSize];
+	cipher = cipherBuf;
+
 
 	encrypt();
 
@@ -257,9 +273,12 @@ int main () {
 	// printf("%08" PRIx32, cipherBlock.b);
 	// printf("%08" PRIx32, cipherBlock.c);
 	// printf("%08" PRIx32 "\n", cipherBlock.d);
-	for (size_t i = 0; i < plainSize; ++i) {
-		printf("%02x", cipher[i]);
-	}
+	freopen(NULL, "wb", stdout);
+	fwrite(cipher, sizeof(plainBuf), 1, stdout);
+
+	// for (size_t i = 0; i < plainSize; ++i) {
+	// 	printf("%02x", cipher[i]);
+	// }
 
 	printf("\n");
 
