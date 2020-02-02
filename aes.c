@@ -1,6 +1,7 @@
 // gcc (-ggdb | -O3) -o aes aes.c && cat aes_sample.in | ./aes | xxd -l 16 -p
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 #include <assert.h>
@@ -207,10 +208,10 @@ void expandKey(unsigned char *key, unsigned char *w) {
 	}
 }
 
-void encrypt() {
+void encrypt(size_t block) {
 	size_t numBlocks = plainSize / BLOCK_SIZE;
 	unsigned char state[plainSize];
-	memcpy(state, plain, plainSize);
+	memcpy(state, plain + block * BLOCK_SIZE, plainSize);
 
 	unsigned char w[numBlocks * (NUM_ROUNDS + 1) * KEY_SIZE];
 
@@ -231,7 +232,7 @@ void encrypt() {
 	shiftRows(state, plainSize);
 	addRoundKey(state, plainSize, &w[NUM_ROUNDS * numBlocks * KEY_SIZE], (NUM_ROUNDS + 1) * numBlocks - 1);
 
-	memcpy(cipher, state, plainSize);
+	memcpy(cipher + block * BLOCK_SIZE, state, plainSize);
 }
 
 unsigned char reverseByte(unsigned char b) {
@@ -252,35 +253,61 @@ int main () {
 	// cipher = (unsigned char *) &cipherBlock;
 
 	// plainSize = 16;
-
 	unsigned char keyBuf[16];
-	freopen(NULL, "rb", stdin);
-	fread(keyBuf, sizeof(keyBuf), 1, stdin);
+	FILE *iReallyDontNeadIt;
+	iReallyDontNeadIt = freopen(NULL, "rb", stdin);
+	size_t keyLengthRead;
+	keyLengthRead = fread(keyBuf, sizeof(keyBuf), 1, stdin);
 	key = keyBuf;
 
-	unsigned char plainBuf[16];
-	fread(plainBuf, sizeof(plainBuf), 1, stdin);
+	size_t remNumBlocks = 1000;
+	plainSize = 0;
+	unsigned char *plainBuf = (unsigned char *) malloc(BLOCK_SIZE * remNumBlocks);
+	size_t len = fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
+
+	while (len > 0) {
+		plainSize += len;
+		--remNumBlocks;
+
+		if (remNumBlocks == 0) {
+			size_t fac = 10;
+			remNumBlocks = (sizeof(plainBuf) / BLOCK_SIZE) * (fac - 1);
+			plainBuf = (unsigned char *) realloc(plainBuf, fac * sizeof(plainBuf));
+			
+		}
+
+		len = fread(plainBuf +plainSize, 1, BLOCK_SIZE, stdin);
+	}
+
+
 	plain = plainBuf;
-	plainSize = 16;
+	
 
 	unsigned char cipherBuf[plainSize];
 	cipher = cipherBuf;
 
+	size_t numBlocks = plainSize / BLOCK_SIZE;
+	plainSize = 16; // sorry
 
-	encrypt();
+	#pragma omp parallel for
+	for (size_t i = 0; i < numBlocks; ++i) {
+		encrypt(i);
+	}	
 
 	// printf("%08" PRIx32, cipherBlock.a);
 	// printf("%08" PRIx32, cipherBlock.b);
 	// printf("%08" PRIx32, cipherBlock.c);
 	// printf("%08" PRIx32 "\n", cipherBlock.d);
-	freopen(NULL, "wb", stdout);
-	fwrite(cipher, sizeof(plainBuf), 1, stdout);
+	iReallyDontNeadIt = freopen(NULL, "wb", stdout);
+	fwrite(cipher, numBlocks * BLOCK_SIZE, 1, stdout);
 
 	// for (size_t i = 0; i < plainSize; ++i) {
 	// 	printf("%02x", cipher[i]);
 	// }
 
 	printf("\n");
+
+	free(plainBuf);
 
 	return 0;
 }
