@@ -305,7 +305,7 @@ int main () {
 	// 	printf("%02x", cipher[i]);
 	// }
 
-	printf("\n");
+	// printf("\n");
 
 	free(plainBuf);
 
