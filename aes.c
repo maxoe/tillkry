@@ -41,6 +41,7 @@ unsigned char *key;
 unsigned char *plain;
 unsigned char *cipher;
 size_t plainSize;
+size_t realPlainSize;
 
 
 void subBytes(unsigned char *state, size_t bytes) {
@@ -92,7 +93,9 @@ void leftRotate(unsigned char *bits, size_t bytes, size_t n) {
 
 void shiftRows(unsigned char *state, size_t bytes) {
 	#pragma omp parallel for
-	unsigned char oldState[plainSize];
+	// unsigned char oldState[plainSize];
+	unsigned char *oldState = (unsigned char *) malloc(plainSize);
+
 	memcpy(oldState, state, plainSize);
 	for (size_t i = 1; i < ROW_SIZE; ++i) {
 		// leftRotate(&state[i * ROW_SIZE], bytes, i * 8);
@@ -101,6 +104,8 @@ void shiftRows(unsigned char *state, size_t bytes) {
 		state[2 * 4 + i] = oldState[((2 + i) % 4) * 4  + i];
 		state[3 * 4 + i] = oldState[((3 + i) % 4) * 4  + i];
 	}
+
+	free(oldState);
 }
 
 void galMul(unsigned char* x, size_t n) {
@@ -120,7 +125,9 @@ void galMul(unsigned char* x, size_t n) {
 }
 
 void mixColumns(unsigned char *state, size_t bytes) {
-	unsigned char oldState[plainSize];
+	// unsigned char oldState[plainSize];
+	unsigned char *oldState = (unsigned char *) malloc(plainSize);
+	
 	memcpy(oldState, state, plainSize);
 
 	#pragma omp parallel for
@@ -141,6 +148,8 @@ void mixColumns(unsigned char *state, size_t bytes) {
 		}
 		
 	}
+
+	free(oldState);
 }
 
 void rotWord(unsigned char *word) {
@@ -210,10 +219,13 @@ void expandKey(unsigned char *key, unsigned char *w) {
 
 void encrypt(size_t block) {
 	size_t numBlocks = plainSize / BLOCK_SIZE;
-	unsigned char state[plainSize];
+	// unsigned char state[plainSize];
+	unsigned char *state = (unsigned char *) malloc(BLOCK_SIZE);
+	// reverse block order because chaos
 	memcpy(state, plain + block * BLOCK_SIZE, plainSize);
 
-	unsigned char w[numBlocks * (NUM_ROUNDS + 1) * KEY_SIZE];
+	unsigned char *w = (unsigned char *) malloc(numBlocks * (NUM_ROUNDS + 1) * KEY_SIZE);
+	// unsigned char w[numBlocks * (NUM_ROUNDS + 1) * KEY_SIZE];
 
 	// expand key here (differs from original alg)
 	expandKey(key, w);
@@ -233,6 +245,9 @@ void encrypt(size_t block) {
 	addRoundKey(state, plainSize, &w[NUM_ROUNDS * numBlocks * KEY_SIZE], (NUM_ROUNDS + 1) * numBlocks - 1);
 
 	memcpy(cipher + block * BLOCK_SIZE, state, plainSize);
+
+	free(state);
+	free(w);
 }
 
 unsigned char reverseByte(unsigned char b) {
@@ -260,34 +275,37 @@ int main () {
 	keyLengthRead = fread(keyBuf, sizeof(keyBuf), 1, stdin);
 	key = keyBuf;
 
-	size_t remNumBlocks = 1000;
+	size_t remNumBlocks = 1000000; // the assignment wants it that way 8192 / 16; // openssl seems to do it this way
+	size_t plainBufSize = BLOCK_SIZE * remNumBlocks;
 	plainSize = 0;
-	unsigned char *plainBuf = (unsigned char *) malloc(BLOCK_SIZE * remNumBlocks);
+	unsigned char *plainBuf = (unsigned char *) malloc(plainBufSize);
+	unsigned char *cipherBuf = (unsigned char *) malloc(plainBufSize);
 	size_t len = fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
 
 	while (len > 0) {
 		plainSize += len;
 		--remNumBlocks;
 
-		if (remNumBlocks == 0) {
-			size_t fac = 10;
-			remNumBlocks = (sizeof(plainBuf) / BLOCK_SIZE) * (fac - 1);
-			plainBuf = (unsigned char *) realloc(plainBuf, fac * sizeof(plainBuf));
+		// if (remNumBlocks == 0) {
+		// 	size_t fac = 2;
+		// 	plainBufSize *= fac;
+		// 	remNumBlocks = (plainBufSize / BLOCK_SIZE) * (fac - 1);
+		// 	plainBuf = (unsigned char *) realloc(plainBuf, plainBufSize);
 			
-		}
+		// }
 
-		len = fread(plainBuf +plainSize, 1, BLOCK_SIZE, stdin);
+		len = fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
 	}
 
 
 	plain = plainBuf;
 	
 
-	unsigned char cipherBuf[plainSize];
 	cipher = cipherBuf;
 
 	size_t numBlocks = plainSize / BLOCK_SIZE;
-	plainSize = 16; // sorry
+	realPlainSize = plainSize;
+	plainSize = 16; // sorry sorry
 
 	#pragma omp parallel for
 	for (size_t i = 0; i < numBlocks; ++i) {
@@ -308,6 +326,7 @@ int main () {
 	// printf("\n");
 
 	free(plainBuf);
+	free(cipherBuf);
 
 	return 0;
 }
