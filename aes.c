@@ -1,5 +1,6 @@
 // gcc (-ggdb | -O3) -o aes aes.c && cat aes_sample.in | ./aes | xxd -l 16 -p
 
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -272,7 +273,7 @@ int main () {
 	FILE *iReallyDontNeadIt;
 	iReallyDontNeadIt = freopen(NULL, "rb", stdin);
 	size_t keyLengthRead;
-	keyLengthRead = fread(keyBuf, sizeof(keyBuf), 1, stdin);
+	keyLengthRead = read(STDIN_FILENO, keyBuf, 16); //fread(keyBuf, sizeof(keyBuf), 1, stdin);
 	key = keyBuf;
 
 	size_t remNumBlocks = 1000000; // the assignment wants it that way 8192 / 16; // openssl seems to do it this way
@@ -280,7 +281,7 @@ int main () {
 	plainSize = 0;
 	unsigned char *plainBuf = (unsigned char *) malloc(plainBufSize);
 	unsigned char *cipherBuf = (unsigned char *) malloc(plainBufSize);
-	size_t len = fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
+	size_t len = read(STDIN_FILENO, plainBuf + plainSize, 16);//fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
 
 	while (len > 0) {
 		plainSize += len;
@@ -294,8 +295,8 @@ int main () {
 			
 		// }
 
-		len = fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
-	}
+		//len = fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
+	}       len = read(STDIN_FILENO, plainBuf + plainSize, 16);
 
 
 	plain = plainBuf;
@@ -317,7 +318,8 @@ int main () {
 	// printf("%08" PRIx32, cipherBlock.c);
 	// printf("%08" PRIx32 "\n", cipherBlock.d);
 	iReallyDontNeadIt = freopen(NULL, "wb", stdout);
-	fwrite(cipher, numBlocks * BLOCK_SIZE, 1, stdout);
+	//fwrite(cipher, numBlocks * BLOCK_SIZE, 1, stdout);
+        printf(cipher);
 
 	// for (size_t i = 0; i < plainSize; ++i) {
 	// 	printf("%02x", cipher[i]);
