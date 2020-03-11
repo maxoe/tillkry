@@ -101,3 +101,6 @@ _deps
 
 # Build Artifact
 aes
+
+# vscode
+.vscode
