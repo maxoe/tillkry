@@ -6,13 +6,13 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <omp.h>
+#include <time.h>
 
-typedef struct bitsblock {
-		uint32_t a;
-		uint32_t b;
-		uint32_t c;
-		uint32_t d;
-	} bitsblock;
+const size_t blockSize = 16;
+const size_t keySize = 16;
+const size_t numRounds = 10;
+size_t numBlocks = 0;
+size_t plainSize = 0;
 
 const unsigned char sbox[256] = {0x63 ,0x7c ,0x77 ,0x7b ,0xf2 ,0x6b ,0x6f ,0xc5 ,0x30 ,0x01 ,0x67 ,0x2b ,0xfe ,0xd7 ,0xab ,0x76,
 								0xca ,0x82 ,0xc9 ,0x7d ,0xfa ,0x59 ,0x47 ,0xf0 ,0xad ,0xd4 ,0xa2 ,0xaf ,0x9c ,0xa4 ,0x72 ,0xc0,
@@ -33,124 +33,6 @@ const unsigned char sbox[256] = {0x63 ,0x7c ,0x77 ,0x7b ,0xf2 ,0x6b ,0x6f ,0xc5 
 
 // index 0 is dummy element
 unsigned char rc[11] = {0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36};
-const size_t BLOCK_SIZE = 16;
-const size_t KEY_SIZE = 16;
-const size_t NUM_ROUNDS = 10;
-const size_t ROW_SIZE = 4;
-unsigned char *key;
-unsigned char *plain;
-unsigned char *cipher;
-size_t plainSize;
-size_t realPlainSize;
-
-
-void subBytes(unsigned char *state, size_t bytes) {
-
-	#pragma omp parallel for
-	for (size_t i = 0; i < bytes; ++i) {
-		state[i] = sbox[state[i]];
-	}
-}
-
-void addRoundKey(unsigned char *state, size_t stateSize, unsigned char *w, size_t last) {
-	#pragma omp parallel for
-	for (size_t i = 0; i < stateSize; ++i) {
-		state[i] ^= w[i];
-	}
-}
-
-bitsblock shiftl128 (uint32_t a, uint32_t b, uint32_t c, uint32_t d, size_t k) {
-    assert (k <= 128);
-    if (k >= 32) // shifting a 32-bit integer by more than 31 bits is "undefined"
-    {
-        a=b;
-        b=c;
-        c=d;
-        d=0;
-        shiftl128(a,b,c,d,k-32);
-    }
-    else
-    {
-        a = (a << k) | (b >> (32-k));
-        b = (b << k) | (c >> (32-k));
-        c = (c << k) | (d >> (32-k));
-        d = (d << k);
-    }
-
-	bitsblock out = {a, b, c, d};
-	return out;
-}
-
-void leftRotate(unsigned char *bits, size_t bytes, size_t n) {
-	// bitsblock *block = (bitsblock *) bits;
-	// bitsblock first = shiftl128(block->a, block->b, block->c, block->d, n);
-	// bitsblock second = shiftl128(block->a, block->b, block->c, block->d, (bytes * 8) - n);
-
-	// bitsblock out = {first.a | second.a, first.a | second.a, first.a | second.a, first.a | second.a};
-	uint64_t *block = (uint64_t *) bits;
-	*block = (*block << n) | (*block >> (64 - n));
-}
-
-void shiftRows(unsigned char *state, size_t bytes) {
-	#pragma omp parallel for
-	// unsigned char oldState[plainSize];
-	unsigned char *oldState = (unsigned char *) malloc(plainSize);
-
-	memcpy(oldState, state, plainSize);
-	for (size_t i = 1; i < ROW_SIZE; ++i) {
-		// leftRotate(&state[i * ROW_SIZE], bytes, i * 8);
-		state[0 * 4 + i] = oldState[((0 + i) % 4) * 4  + i];
-		state[1 * 4 + i] = oldState[((1 + i) % 4) * 4  + i];
-		state[2 * 4 + i] = oldState[((2 + i) % 4) * 4  + i];
-		state[3 * 4 + i] = oldState[((3 + i) % 4) * 4  + i];
-	}
-
-	free(oldState);
-}
-
-void galMul(unsigned char* x, size_t n) {
-	if (n == 1) {
-		return;
-	} else if (n == 2) {
-		int cond = *x >> 7;
-		*x <<= 1;
-		if (cond == 1) {
-			*x ^= 0x1B;
-		}
-	} else if (n == 3) {
-		unsigned char temp = *x;
-		galMul(x, 2);
-		*x ^= temp;
-	}
-}
-
-void mixColumns(unsigned char *state, size_t bytes) {
-	// unsigned char oldState[plainSize];
-	unsigned char *oldState = (unsigned char *) malloc(plainSize);
-	
-	memcpy(oldState, state, plainSize);
-
-	#pragma omp parallel for
-	size_t mat[4][4] = {{2,3,1,1},{1,2,3,1},{1,1,2,3},{3,1,1,2}};
-	for (size_t i = 0; i < ROW_SIZE; ++i) {
-		for (size_t j = 0; j < ROW_SIZE; ++j) {
-			unsigned char a = oldState[0 + i * 4];
-			unsigned char b = oldState[1 + i * 4];
-			unsigned char c = oldState[2 + i * 4];
-			unsigned char d = oldState[3 + i * 4];
-
-			galMul(&a, mat[j][0]);
-			galMul(&b, mat[j][1]);
-			galMul(&c, mat[j][2]);
-			galMul(&d, mat[j][3]);
-
-			state[j + i * 4] = a ^ b ^ c ^ d;
-		}
-		
-	}
-
-	free(oldState);
-}
 
 void rotWord(unsigned char *word) {
 	unsigned char temp = *word;
@@ -160,26 +42,11 @@ void rotWord(unsigned char *word) {
 	word[3] = temp;
 }
 
-// void expandKey(unsigned char *key, unsigned char *w) {
-// 	memcpy(w, key, KEY_SIZE);
-	
-// 	for (int i = 4 * 4; i < 4 * 44; i += 4) {
-// 		unsigned char temp[4];
-// 		memcpy(temp, w + i - 4, 4);
-
-// 		if ((i / 4) % 4 == 0) {
-// 			rotWord(temp);
-// 			subBytes(temp, 4);
-// 			temp[0] ^= rc[i / (4 * 4)];
-// 		}
-
-// 		memcpy(w + i, w + i - 4 * 4, 4);
-// 		*((unsigned char*) w + i + 0) ^= temp[0];
-// 		*((unsigned char*) w + i + 1) ^= temp[1];
-// 		*((unsigned char*) w + i + 2) ^= temp[2];
-// 		*((unsigned char*) w + i + 3) ^= temp[3];
-// 	}
-// }
+void subBytes(unsigned char *state, size_t bytes) {
+	for (size_t i = 0; i < bytes; ++i) {
+		state[i] = sbox[state[i]];
+	}
+}
 
 void expandKey(unsigned char *key, unsigned char *w) {
 	unsigned char temp[4];
@@ -195,8 +62,7 @@ void expandKey(unsigned char *key, unsigned char *w) {
 
 	i = 4;
 
-	size_t numBlocks = 1; // sorry
-	while (i < numBlocks * (NUM_ROUNDS + 1) * 4) {
+	while (i < (numRounds + 1) * 4) {
 		temp[0] = w[4 * i - 4 + 0];
 		temp[1] = w[4 * i - 4 + 1];
 		temp[2] = w[4 * i - 4 + 2];
@@ -217,116 +83,149 @@ void expandKey(unsigned char *key, unsigned char *w) {
 	}
 }
 
-void encrypt(size_t block) {
-	size_t numBlocks = plainSize / BLOCK_SIZE;
-	// unsigned char state[plainSize];
-	unsigned char *state = (unsigned char *) malloc(BLOCK_SIZE);
-	// reverse block order because chaos
-	memcpy(state, plain + block * BLOCK_SIZE, plainSize);
-
-	unsigned char *w = (unsigned char *) malloc(numBlocks * (NUM_ROUNDS + 1) * KEY_SIZE);
-	// unsigned char w[numBlocks * (NUM_ROUNDS + 1) * KEY_SIZE];
-
-	// expand key here (differs from original alg)
-	expandKey(key, w);
-
-	addRoundKey(state, plainSize, &w[0], numBlocks - 1);
-
-	for (size_t round = 1; round < NUM_ROUNDS; ++round) {
-		subBytes(state, plainSize);
-		shiftRows(state, plainSize);
-		mixColumns(state, plainSize);
-		// 4th parameter doesn't matter
-		addRoundKey(state, plainSize, &w[round * numBlocks * KEY_SIZE], (round + 1) * numBlocks - 1);
+void addRoundKey(unsigned char *state, unsigned char *w) {
+	for (size_t i = 0; i < blockSize; ++i) {
+		state[i] ^= w[i];
 	}
-
-	subBytes(state, plainSize);
-	shiftRows(state, plainSize);
-	addRoundKey(state, plainSize, &w[NUM_ROUNDS * numBlocks * KEY_SIZE], (NUM_ROUNDS + 1) * numBlocks - 1);
-
-	memcpy(cipher + block * BLOCK_SIZE, state, plainSize);
-
-	free(state);
-	free(w);
 }
 
-unsigned char reverseByte(unsigned char b) {
-	b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
-	b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
-	b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
-	return b;
+void galMul(unsigned char* x, size_t n) {
+	if (n == 1) {
+		return;
+	} else if (n == 2) {
+		int cond = *x >> 7;
+		*x <<= 1;
+		if (cond == 1) {
+			*x ^= 0x1B;
+		}
+	} else if (n == 3) {
+		unsigned char temp = *x;
+		galMul(x, 2);
+		*x ^= temp;
+	}
+}
+
+void mixColumns(unsigned char *state) {
+	unsigned char *oldState = (unsigned char *) malloc(blockSize);
+	
+	memcpy(oldState, state, blockSize);
+
+	size_t mat[4][4] = {{2,3,1,1},{1,2,3,1},{1,1,2,3},{3,1,1,2}};
+	for (size_t i = 0; i < 4; ++i) {
+		for (size_t j = 0; j < 4; ++j) {
+			unsigned char a = oldState[0 + i * 4];
+			unsigned char b = oldState[1 + i * 4];
+			unsigned char c = oldState[2 + i * 4];
+			unsigned char d = oldState[3 + i * 4];
+
+			galMul(&a, mat[j][0]);
+			galMul(&b, mat[j][1]);
+			galMul(&c, mat[j][2]);
+			galMul(&d, mat[j][3]);
+
+			state[j + i * 4] = a ^ b ^ c ^ d;
+		}
+		
+	}
+
+	free(oldState);
+}
+
+void shiftRows(unsigned char *state) {
+	unsigned char *oldState = (unsigned char *) malloc(blockSize);
+	memcpy(oldState, state, blockSize);
+
+	for (size_t i = 1; i < 4; ++i) {
+		state[0 * 4 + i] = oldState[((0 + i) % 4) * 4  + i];
+		state[1 * 4 + i] = oldState[((1 + i) % 4) * 4  + i];
+		state[2 * 4 + i] = oldState[((2 + i) % 4) * 4  + i];
+		state[3 * 4 + i] = oldState[((3 + i) % 4) * 4  + i];
+	}
+
+	free(oldState);
+}
+
+void encryptBlock(unsigned char *plainBlock, unsigned char* cipherBlock, unsigned char* w) {
+	unsigned char *state = (unsigned char *) malloc(blockSize);
+	memcpy(state, plainBlock, blockSize);
+
+	addRoundKey(state, &w[0]);	
+
+	for (size_t round = 1; round < numRounds; ++round) {
+		subBytes(state, blockSize);
+		shiftRows(state);
+		mixColumns(state);
+		addRoundKey(state, &w[round * keySize]);		
+	}
+
+	subBytes(state, blockSize);
+	shiftRows(state);
+	addRoundKey(state, &w[numRounds * keySize]);
+
+	memcpy(cipherBlock, state, blockSize);
+
+	free(state);
 }
 
 int main () {
-	// // bitsblock keyBlock= {0xF4C020A0, 0xA1F604FD, 0x343FAC6A, 0x7E6AE0F9};
-	// bitsblock keyBlock= {0xA020C0F4, 0xFD04F6A1, 0x6AAc3F34, 0xF9E06A7E};
-	// // bitsblock plainBlock = {0xF295B931, 0x8B994434, 0xD93D98A4, 0xE449AFD8};
-	// bitsblock plainBlock = {0x31B995F2, 0x3444998B, 0xA4983DD9, 0xD8AF49E4};
-	// bitsblock cipherBlock = {0x00000000, 0x00000000, 0x00000000, 0x00000000};
-	// key = (unsigned char *) &keyBlock;
-	// plain = (unsigned char *) &plainBlock;
-	// cipher = (unsigned char *) &cipherBlock;
+	size_t remNumBlocks =  8192 / 16; // the assignment says max 10^6 blocks // openssl seems to do it this way 8192 / 16
+	size_t plainBufSize = blockSize * remNumBlocks;
 
-	// plainSize = 16;
-	unsigned char keyBuf[16];
-	FILE *iReallyDontNeadIt;
-	iReallyDontNeadIt = freopen(NULL, "rb", stdin);
-	size_t keyLengthRead;
-	keyLengthRead = fread(keyBuf, sizeof(keyBuf), 1, stdin);
-	key = keyBuf;
+	unsigned char *key = (unsigned char *) malloc(keySize);
+	size_t len = fread(key, 1, keySize, stdin);
 
-	size_t remNumBlocks = 1000000; // the assignment wants it that way 8192 / 16; // openssl seems to do it this way
-	size_t plainBufSize = BLOCK_SIZE * remNumBlocks;
-	plainSize = 0;
 	unsigned char *plainBuf = (unsigned char *) malloc(plainBufSize);
-	unsigned char *cipherBuf = (unsigned char *) malloc(plainBufSize);
-	size_t len = fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
-
+	
+	// read blockwise
+	len = fread(plainBuf, 1, blockSize, stdin);
+	
 	while (len > 0) {
+		// printf("%ld\n", len);
 		plainSize += len;
 		--remNumBlocks;
 
-		// if (remNumBlocks == 0) {
-		// 	size_t fac = 2;
-		// 	plainBufSize *= fac;
-		// 	remNumBlocks = (plainBufSize / BLOCK_SIZE) * (fac - 1);
-		// 	plainBuf = (unsigned char *) realloc(plainBuf, plainBufSize);
+		// if we ran out of space, enlarge buffer by fac and update remNumBlocks and plainBufSize
+		if (remNumBlocks == 0) {
+			size_t fac = 2;
+			remNumBlocks = (plainBufSize / blockSize) * (fac - 1);
+			plainBufSize *= fac;			
+			plainBuf = (unsigned char *) realloc(plainBuf, plainBufSize);
 			
-		// }
-
-		len = fread(plainBuf + plainSize, 1, BLOCK_SIZE, stdin);
+		}
+		// fseek(stdin, 1, SEEK_CUR);
+		len = fread(plainBuf + plainSize, 1, blockSize, stdin);
 	}
-
-
-	plain = plainBuf;
 	
+	unsigned char *cipherBuf = (unsigned char *) malloc(plainSize);
 
-	cipher = cipherBuf;
+	numBlocks = plainSize / blockSize;
 
-	size_t numBlocks = plainSize / BLOCK_SIZE;
-	realPlainSize = plainSize;
-	plainSize = 16; // sorry sorry
+	// expand key
+	unsigned char *w = (unsigned char *) malloc((numRounds + 1) * keySize);
+	expandKey(key, w);
 
 	#pragma omp parallel for
 	for (size_t i = 0; i < numBlocks; ++i) {
-		encrypt(i);
+		encryptBlock(plainBuf + i * blockSize, cipherBuf + i * blockSize, w);
 	}	
 
-	// printf("%08" PRIx32, cipherBlock.a);
-	// printf("%08" PRIx32, cipherBlock.b);
-	// printf("%08" PRIx32, cipherBlock.c);
-	// printf("%08" PRIx32 "\n", cipherBlock.d);
-	iReallyDontNeadIt = freopen(NULL, "wb", stdout);
-	fwrite(cipher, numBlocks * BLOCK_SIZE, 1, stdout);
-
+	// // //printf("%08" PRIx32, cipherBlock.a);
+	// // //printf("%08" PRIx32, cipherBlock.b);
+	// // //printf("%08" PRIx32, cipherBlock.c);
+	// // //printf("%08" PRIx32 "\n", cipherBlock.d);
+	FILE *iReallyDontNeadIt = freopen(NULL, "wb", stdout);
+	fwrite(cipherBuf, plainSize, 1, stdout);
+	
 	// for (size_t i = 0; i < plainSize; ++i) {
-	// 	printf("%02x", cipher[i]);
+	// 	printf("%02x", cipherBuf[i]);
 	// }
 
-	// printf("\n");
+	// //printf("\n");
 
 	free(plainBuf);
 	free(cipherBuf);
+	free(key);
+	free(w);
 
 	return 0;
 }
