@@ -215,7 +215,10 @@ int main () {
 	// // //printf("%08" PRIx32 "\n", cipherBlock.d);
 	// FILE *iReallyDontNeadIt = freopen(NULL, "wb", stdout);
 	// fwrite(cipherBuf, plainSize, 1, stdout);
-	printf(cipher);
+	for (int i = 0; i < plainSize; ++i) {
+		printf("%c", cipherBuf[i]);
+	}
+	// printf(cipherBuf);
 	
 	// for (size_t i = 0; i < plainSize; ++i) {
 	// 	printf("%02x", cipherBuf[i]);
