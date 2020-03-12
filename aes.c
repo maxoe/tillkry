@@ -114,50 +114,48 @@ void galMul(unsigned char* x, size_t n) {
 }
 
 void mixColumns(unsigned char *state) {
-	unsigned char *oldState = (unsigned char *) malloc(blockSize);
-	
-	memcpy(oldState, state, blockSize);
-
 	//size_t mat[4][4] = {{2,3,1,1},{1,2,3,1},{1,1,2,3},{3,1,1,2}};
 
 	for (size_t i = 0; i < 4; ++i) {
-		unsigned char a = oldState[0 + i * 4];
-		unsigned char b = oldState[1 + i * 4];
+		unsigned char oldState0 = state[0 + i * 4];
+		unsigned char oldState1 = state[1 + i * 4];
+		unsigned char oldState2 = state[2 + i * 4];
+
+		unsigned char a = oldState0;
+		unsigned char b = oldState1;
 
 		galMul(&a, 2);
 		galMul(&b, 3);
 
-		state[0 + i * 4] = a ^ b ^ oldState[2 + i * 4] ^ oldState[3 + i * 4];
+		state[0 + i * 4] = a ^ b ^ oldState2 ^ state[3 + i * 4];
 
 
-		b = oldState[1 + i * 4];
-		unsigned char c = oldState[2 + i * 4];
+		b = oldState1;
+		unsigned char c = oldState2;
 
 		galMul(&b, 2);
 		galMul(&c, 3);
 
-		state[1 + i * 4] = oldState[0 + i * 4] ^ b ^ c ^ oldState[3 + i * 4];
+		state[1 + i * 4] = oldState0 ^ b ^ c ^ state[3 + i * 4];
 
 
-		c = oldState[2 + i * 4];
-		unsigned char d = oldState[3 + i * 4];
+		c = oldState2;
+		unsigned char d = state[3 + i * 4];
 
 		galMul(&c, 2);
 		galMul(&d, 3);
 
-		state[2 + i * 4] = oldState[0 + i * 4] ^ oldState[1 + i * 4] ^ c ^ d;
+		state[2 + i * 4] = oldState0 ^ oldState1 ^ c ^ d;
 
 
-		a = oldState[0 + i * 4];
-		d = oldState[3 + i * 4];
+		a = oldState0;
+		d = state[3 + i * 4];
 
 		galMul(&a, 3);
 		galMul(&d, 2);
 
-		state[3 + i * 4] = a ^ oldState[1 + i * 4] ^ oldState[2 + i * 4] ^ d;		
+		state[3 + i * 4] = a ^ oldState1 ^ oldState2 ^ d;
 	}
-
-	free(oldState);
 }
 
 void shiftRows(unsigned char *state) {
