@@ -140,17 +140,29 @@ void mixColumns(unsigned char *state) {
 }
 
 void shiftRows(unsigned char *state) {
-	unsigned char *oldState = (unsigned char *) malloc(blockSize);
-	memcpy(oldState, state, blockSize);
+	unsigned char oldState1 = state[1];
 
-	for (size_t i = 1; i < 4; ++i) {
-		state[0 * 4 + i] = oldState[((0 + i) % 4) * 4  + i];
-		state[1 * 4 + i] = oldState[((1 + i) % 4) * 4  + i];
-		state[2 * 4 + i] = oldState[((2 + i) % 4) * 4  + i];
-		state[3 * 4 + i] = oldState[((3 + i) % 4) * 4  + i];
-	}
+	unsigned char oldState2 = state[2];
+	unsigned char oldState6 = state[6];
 
-	free(oldState);
+	unsigned char oldState3 = state[3];
+	unsigned char oldState7 = state[7];
+	unsigned char oldState11 = state[11];
+
+	state[1] = state[5];
+	state[5] = state[9];
+	state[9] = state[13];
+	state[13] = oldState1;
+
+	state[2] = state[10];
+	state[6] = state[14];
+	state[10] = oldState2;
+	state[14] = oldState6;
+
+	state[3] = state[15];
+	state[7] = oldState3;
+	state[11] = oldState7;
+	state[15] = oldState11;
 }
 
 void encryptBlock(unsigned char *plainBlock, unsigned char* cipherBlock, unsigned char* w) {
