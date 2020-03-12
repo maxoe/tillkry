@@ -119,20 +119,59 @@ void mixColumns(unsigned char *state) {
 	memcpy(oldState, state, blockSize);
 
 	size_t mat[4][4] = {{2,3,1,1},{1,2,3,1},{1,1,2,3},{3,1,1,2}};
+
 	for (size_t i = 0; i < 4; ++i) {
-		for (size_t j = 0; j < 4; ++j) {
-			unsigned char a = oldState[0 + i * 4];
-			unsigned char b = oldState[1 + i * 4];
-			unsigned char c = oldState[2 + i * 4];
-			unsigned char d = oldState[3 + i * 4];
+		unsigned char a = oldState[0 + i * 4];
+		unsigned char b = oldState[1 + i * 4];
+		unsigned char c = oldState[2 + i * 4];
+		unsigned char d = oldState[3 + i * 4];
 
-			galMul(&a, mat[j][0]);
-			galMul(&b, mat[j][1]);
-			galMul(&c, mat[j][2]);
-			galMul(&d, mat[j][3]);
+		galMul(&a, mat[0][0]);
+		galMul(&b, mat[0][1]);
+		// galMul(&c, mat[0][2]);
+		// galMul(&d, mat[0][3]);
 
-			state[j + i * 4] = a ^ b ^ c ^ d;
-		}
+		state[0 + i * 4] = a ^ b ^ c ^ d;
+
+
+		a = oldState[0 + i * 4];
+		b = oldState[1 + i * 4];
+		c = oldState[2 + i * 4];
+		d = oldState[3 + i * 4];
+
+		// galMul(&a, mat[1][0]);
+		galMul(&b, mat[1][1]);
+		galMul(&c, mat[1][2]);
+		// galMul(&d, mat[1][3]);
+
+		state[1 + i * 4] = a ^ b ^ c ^ d;
+
+
+		a = oldState[0 + i * 4];
+		b = oldState[1 + i * 4];
+		c = oldState[2 + i * 4];
+		d = oldState[3 + i * 4];
+
+		// galMul(&a, mat[2][0]);
+		// galMul(&b, mat[2][1]);
+		galMul(&c, mat[2][2]);
+		galMul(&d, mat[2][3]);
+
+		state[2 + i * 4] = a ^ b ^ c ^ d;
+
+
+		a = oldState[0 + i * 4];
+		b = oldState[1 + i * 4];
+		c = oldState[2 + i * 4];
+		d = oldState[3 + i * 4];
+
+		galMul(&a, mat[3][0]);
+		// galMul(&b, mat[3][1]);
+		// galMul(&c, mat[3][2]);
+		galMul(&d, mat[3][3]);
+
+		state[3 + i * 4] = a ^ b ^ c ^ d;
+		
 		
 	}
 
