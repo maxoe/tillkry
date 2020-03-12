@@ -100,7 +100,15 @@ void galMul(unsigned char* x, size_t n) {
 		}
 	} else if (n == 3) {
 		unsigned char temp = *x;
-		galMul(x, 2);
+		
+		// remove recursion for speedup
+		// galMul(x, 2);
+		int cond = *x >> 7;
+		*x <<= 1;
+		if (cond == 1) {
+			*x ^= 0x1B;
+		}
+
 		*x ^= temp;
 	}
 }
