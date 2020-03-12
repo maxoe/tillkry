@@ -165,9 +165,8 @@ void shiftRows(unsigned char *state) {
 	state[15] = oldState11;
 }
 
-void encryptBlock(unsigned char *plainBlock, unsigned char* cipherBlock, unsigned char* w) {
-	unsigned char *state = (unsigned char *) malloc(blockSize);
-	memcpy(state, plainBlock, blockSize);
+void encryptBlock(unsigned char *plainBlock, unsigned char* w) {
+	unsigned char *state = plainBlock;
 
 	addRoundKey(state, &w[0]);	
 
@@ -181,10 +180,6 @@ void encryptBlock(unsigned char *plainBlock, unsigned char* cipherBlock, unsigne
 	subBytes(state, blockSize);
 	shiftRows(state);
 	addRoundKey(state, &w[numRounds * keySize]);
-
-	memcpy(cipherBlock, state, blockSize);
-
-	free(state);
 }
 
 int main () {
@@ -200,7 +195,6 @@ int main () {
 	len = fread(plainBuf, 1, blockSize, stdin);
 	
 	while (len > 0) {
-		// printf("%ld\n", len);
 		plainSize += len;
 		--remNumBlocks;
 
@@ -212,11 +206,9 @@ int main () {
 			plainBuf = (unsigned char *) realloc(plainBuf, plainBufSize);
 			
 		}
-		// fseek(stdin, 1, SEEK_CUR);
+
 		len = fread(plainBuf + plainSize, 1, blockSize, stdin);
 	}
-	
-	unsigned char *cipherBuf = (unsigned char *) malloc(plainSize);
 
 	numBlocks = plainSize / blockSize;
 
@@ -226,28 +218,14 @@ int main () {
 
 	#pragma omp parallel for
 	for (size_t i = 0; i < numBlocks; ++i) {
-		encryptBlock(plainBuf + i * blockSize, cipherBuf + i * blockSize, w);
-	}	
-
-	// // //printf("%08" PRIx32, cipherBlock.a);
-	// // //printf("%08" PRIx32, cipherBlock.b);
-	// // //printf("%08" PRIx32, cipherBlock.c);
-	// // //printf("%08" PRIx32 "\n", cipherBlock.d);
-	// FILE *iReallyDontNeadIt = freopen(NULL, "wb", stdout);
-	// fwrite(cipherBuf, plainSize, 1, stdout);
-	for (int i = 0; i < plainSize; ++i) {
-		printf("%c", cipherBuf[i]);
+		encryptBlock(plainBuf + i * blockSize, w);
 	}
-	// printf(cipherBuf);
-	
-	// for (size_t i = 0; i < plainSize; ++i) {
-	// 	printf("%02x", cipherBuf[i]);
-	// }
 
-	// //printf("\n");
+	for (int i = 0; i < plainSize; ++i) {
+		printf("%c", plainBuf[i]);
+	}
 
 	free(plainBuf);
-	free(cipherBuf);
 	free(key);
 	free(w);
 
